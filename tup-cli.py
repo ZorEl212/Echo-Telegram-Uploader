@@ -5,15 +5,18 @@ import os
 import time
 import sys
 from tqdm import tqdm
+import configparser
 
-# Your bot token
-API_ID = os.getenv("API_ID",  input("Enter API ID: "))
-API_HASH = os.getenv("API_HASH", input("Enter API HASH: "))
-BOT_TOKEN = os.getenv("BOT_TOKEN", input("Enter BOT TOKEN: "))
-SESSION_PATH = os.getenv("SESSION_PATH", "./")
+# Read configuration from config.ini
+config = configparser.ConfigParser()
+data_dir = os.path.join(os.getenv("HOME"), ".tup")
+config.read(os.path.join(data_dir, "config.ini"))
 
-# Group chat ID
-GROUP_CHAT_ID = os.getenv("GROUP_CHAT_ID", input("Enter GROUP CHAT ID: "))
+API_ID = config.get('telegram', 'api_id')
+API_HASH = config.get('telegram', 'api_hash')
+BOT_TOKEN = config.get('telegram', 'bot_token')
+SESSION_PATH = data_dir
+GROUP_CHAT_ID = config.get('telegram', 'group_chat_id')
 
 # Create a Pyrogram client
 app = Client(os.path.join(SESSION_PATH,"my_bot"),

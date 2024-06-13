@@ -7,15 +7,19 @@ import sys
 from tqdm import tqdm
 
 # Your bot token
-API_ID = os.getenv("API_ID") if os.getenv("API_ID") else input("Enter API ID: ")
-API_HASH = os.getenv("API_HASH") if os.getenv("API_HASH") else input("Enter API HASH: ")
-BOT_TOKEN = os.getenv("BOT_TOKEN") if os.getenv("BOT_TOKEN") else input("Enter BOT TOKEN: ")
+API_ID = os.getenv("API_ID",  input("Enter API ID: "))
+API_HASH = os.getenv("API_HASH", input("Enter API HASH: "))
+BOT_TOKEN = os.getenv("BOT_TOKEN", input("Enter BOT TOKEN: "))
+SESSION_PATH = os.getenv("SESSION_PATH", "./")
 
 # Group chat ID
-GROUP_CHAT_ID = os.getenv("GROUP_CHAT_ID") if os.getenv("GROUP_CHAT_ID") else input("Enter GROUP CHAT ID: ")
+GROUP_CHAT_ID = os.getenv("GROUP_CHAT_ID", input("Enter GROUP CHAT ID: "))
 
 # Create a Pyrogram client
-app = Client("my_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client(os.path.join(SESSION_PATH,"my_bot"),
+             api_id=API_ID,
+             api_hash=API_HASH,
+             bot_token=BOT_TOKEN)
 
 async def send_global_message(client, file_path):
     file_size = os.path.getsize(file_path)

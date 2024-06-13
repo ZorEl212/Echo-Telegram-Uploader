@@ -10,7 +10,7 @@ API_ID = os.getenv("API_ID", input("Enter API ID: "))
 API_HASH = os.getenv("API_HASH", input("Enter API HASH: "))
 BOT_TOKEN = os.getenv("BOT_TOKEN",  input("Enter BOT TOKEN: "))
 SESSION_PATH = os.getenv("SESSION_PATH", "./")
-GROUP_CHAT_ID = os.getenv("GROUP_CHAT_ID") if os.getenv("GROUP_CHAT_ID") else input("Enter GROUP CHAT ID: ")
+GROUP_CHAT_ID = os.getenv("GROUP_CHAT_ID",  input("Enter GROUP CHAT ID: "))
 
 # Create a Pyrogram client
 app = Client(os.path.join(SESSION_PATH, "my_bot"),

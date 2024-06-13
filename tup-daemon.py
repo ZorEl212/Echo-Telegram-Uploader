@@ -4,19 +4,26 @@ from pyrogram import Client, filters
 import os
 import time
 import sys
+import configparser
 
-# Your bot token
-API_ID = os.getenv("API_ID", input("Enter API ID: "))
-API_HASH = os.getenv("API_HASH", input("Enter API HASH: "))
-BOT_TOKEN = os.getenv("BOT_TOKEN",  input("Enter BOT TOKEN: "))
-SESSION_PATH = os.getenv("SESSION_PATH", "./")
-GROUP_CHAT_ID = os.getenv("GROUP_CHAT_ID",  input("Enter GROUP CHAT ID: "))
+# Read configuration from config.ini
+config = configparser.ConfigParser()
+data_dir = os.path.join(os.getenv("HOME"), ".tup")
+config.read(os.path.join(data_dir, "config.ini"))
+print(os.path.join(data_dir, "config.ini"))
+
+
+API_ID = config.get('telegram', 'api_id')
+API_HASH = config.get('telegram', 'api_hash')
+BOT_TOKEN = config.get('telegram', 'bot_token')
+SESSION_PATH = data_dir
+GROUP_CHAT_ID = config.get('telegram', 'group_chat_id')
 
 # Create a Pyrogram client
 app = Client(os.path.join(SESSION_PATH, "my_bot"),
               api_id=API_ID,
-                api_hash=API_HASH, 
-                bot_token=BOT_TOKEN)
+              api_hash=API_HASH, 
+              bot_token=BOT_TOKEN)
 
 @app.on_message(filters.command("start"))
 async def start(client, message):
@@ -61,6 +68,5 @@ async def upload_file(client, message):
     except Exception as e:
         await progress_message.edit_text(f"An error occurred: {str(e)}")
 
-
 if __name__ == "__main__":
-        app.run()
+    app.run()

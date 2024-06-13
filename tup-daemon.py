@@ -29,10 +29,18 @@ app = Client(os.path.join(SESSION_PATH, "my_bot"),
 async def start(client, message):
     await message.reply_text("Welcome! Use /upload <file_path> to upload a file.")
 
+@app.on_message(filters.command("id"))
+async def get_chat_id(client, message):
+    await message.reply_text(f"Chat ID: {message.chat.id}")
+
+
 @app.on_message(filters.command("upload"))
 async def upload_file(client, message):
     if str(message.chat.type) not in ["ChatType.SUPERGROUP", "ChatType.GROUP"]:
         await message.reply_text("Oops! this command can only be used in groups!")
+        return
+
+    if message.chat.id != int(GROUP_CHAT_ID):
         return
 
     try:

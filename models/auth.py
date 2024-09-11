@@ -76,7 +76,7 @@ class Auth:
     @classmethod
     def check_server_details(cls, user_id, serverId):
         server = storage.get('Server', serverId)
-        if (server is None or server.get('serverId') != serverId or
-            server.get('userId') != user_id):
-            return None
+        if (server is None or server.id != serverId or
+            server.userId != user_id):
+            return False
         return server.to_dict()

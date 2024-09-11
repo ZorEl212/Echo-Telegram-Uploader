@@ -31,22 +31,32 @@ class DBClient:
         return docs
 
     def new(self, obj):
-        collection = self.database[obj.get_cls_name()]
+        collection = self.database[obj.cls_name()]
         collection.insert_one(obj.to_dict())
 
     def delete(self, obj):
-        collection = self.database[obj.get_cls_name()]
+        collection = self.database[obj.cls_name()]
         collection.delete_one({'id': obj.id})
 
     def get(self, cls, id):
-        collection = self.database[cls]
+        if isinstance(cls, str):
+            cls = next((c for c in self.classes if c.get_cls_name() == cls), None)
+
+        if cls is None:
+            return None
+
+        collection = self.database[cls.get_cls_name()]
         document = collection.find_one({'id': id})
+
         if document is not None:
-            document.pop('_id')
-        return document
+            document.pop('_id')  
+            document.pop('cls_name')
+            return cls(**document)
+
+        return None  # Return None if document is not found
 
     def update(self, obj):
-        collection = self.database[obj.get_cls_name()]
+        collection = self.database[obj.cls_name()]
         collection.update_one({'id': obj.id}, {'$set': obj.to_dict()})
         return obj
 

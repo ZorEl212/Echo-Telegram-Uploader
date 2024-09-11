@@ -8,5 +8,5 @@ import jwt
 storage = DBClient()
 config = Redis()
 
-sio = socketio.Server()
+sio = socketio.Server(always_connect=True, logger=True, engineio_logger=True)
 

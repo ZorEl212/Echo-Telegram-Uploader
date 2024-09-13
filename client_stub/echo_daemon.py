@@ -4,6 +4,7 @@ import ast
 import time
 import os
 import sys
+import ast
 import datetime
 import configparser
 from socketio import ClientNamespace
@@ -36,9 +37,12 @@ class DaemonAuthClient(ClientNamespace):
 
     def on_auth_required(self, data):
         print(data['message'])
+        server_info = {}
         # Perform authentication (send userId and serverId)
-        user_id = input("User ID: ")
-        server_id = input("Server ID: ")
+        if config.has_option('SERVER', 'server'):
+            server_info = ast.literal_eval(config.get('SERVER', 'server'))
+        user_id = server_info.get('userId', input("User ID: "))
+        server_id = server_info.get('id', input("Server ID: "))
         sio.emit('authenticate', {'userId': user_id, 'serverId': server_id}, namespace='/daemon')
 
     def on_authenticated(self, data):
@@ -46,7 +50,7 @@ class DaemonAuthClient(ClientNamespace):
         print(f'Authenticated successfully')
         config.set('TOKEN', 'token', self.token)
         if 'server' in data:
-            config.set('SERVER', 'server_id', str(data['server']))
+            config.set('SERVER', 'server', str(data['server']))
         config_saver(config, data_dir)
         # Start sending mock data after successful authentication
         self.send_mock_data()

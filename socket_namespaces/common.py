@@ -15,7 +15,10 @@ class Common(Namespace):
         except Exception as e:
             print(f"Token verification error: {e}")
             raise ConnectionRefusedError({'message': 'Invalid token', 'err_code': 1001})
-
+        session = sio.get_session(sid, namespace='/daemon')
+        session['authenticated'] = True
+        sio.save_session(sid, session, namespace='/daemon')
+        sio.emit('authenticated', {'token': auth['token']}, to=sid, namespace='/daemon')
         return True
 
     def on_authenticate(self, sid, data):
@@ -37,6 +40,32 @@ class Common(Namespace):
         jwe_data = {'userId': userId, 'serverId': serverId}
         token = Auth.create_token(jwe_data, sid)
         sio.emit('authenticated', {'token': token, 'server': retval}, to=sid, namespace='/daemon')
+        session = sio.get_session(sid, namespace='/daemon')
+        session['authenticated'] = True
+        sio.save_session(sid, session, namespace='/daemon')
 
+    def check_auth(self, sid):
+        session = sio.get_session(sid, namespace='/daemon')
+        return session.get('authenticated', False)
+
+    def on_message(self, sid, data):
+        if not self.check_auth(sid):
+            self.handle_unauthorized(sid)
+            return
+
+        print(f"Received message from {sid}: {data}")
+
+    def handle_unauthorized(self, sid):
+        session = sio.get_session(sid, namespace='/daemon')
+        session['message_count'] = session.get('message_count', 0) + 1
+        sio.save_session(sid, session, namespace='/daemon')
+
+        if not self.check_auth(sid):
+            if session['message_count'] >= 3:
+                sio.emit('auth_failed', {'message': 'Too many attempts, disconnecting...', 'err_code': 1004}, to=sid, namespace='/daemon')
+                sio.disconnect(sid, namespace='/daemon')
+            else:
+                sio.emit('auth_required', {'message': 'Authentication required'}, to=sid, namespace='/daemon')
+                
     def on_disconnect(self, sid):
         print(f"Client {sid} disconnected")

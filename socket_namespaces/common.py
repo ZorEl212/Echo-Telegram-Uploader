@@ -2,11 +2,23 @@ from socketio import Namespace
 from models import config, sio
 from models.auth import Auth
 from socketio.exceptions import ConnectionRefusedError
+import threading
+
+def auth_timeout(sid, timeout=15):
+    def disconnect():
+        session = sio.get_session(sid, namespace='/daemon')
+        if not session.get('authenticated', False):
+            sio.emit('auth_failed', {'message': 'Authentication timeout', 'err_code': 1005}, to=sid, namespace='/daemon')
+            sio.disconnect(sid, namespace='/daemon')
+    timer = threading.Timer(timeout, disconnect)
+    timer.start()
+
 class Common(Namespace):
     def on_connect(self, sid, environ, auth):
         print(f"Client {sid} connected")
         if auth is None or 'token' not in auth:
             sio.emit('auth_required', {'message': 'Authentication required'}, to=sid, namespace='/daemon')
+            auth_timeout(sid)
             return True
         try:
             payload = Auth.verify_token(auth['token'])

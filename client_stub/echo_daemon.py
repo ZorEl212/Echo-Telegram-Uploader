@@ -67,7 +67,7 @@ class DaemonAuthClient(ClientNamespace):
         build['timestamp'] = datetime.datetime.utcnow().isoformat() + 'Z'
         data = json.dumps(build)
         if sio.connected:
-            sio.emit('message', data, namespace='/daemon')
+            sio.emit('builds_report', data, namespace='/daemon')
         else:
             print("WebSocket connection is closed, unable to send data.")
 

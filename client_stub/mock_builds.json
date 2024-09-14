@@ -1,0 +1,16 @@
+[
+    {
+        "id": 1,
+        "name": "Build 1",
+        "status": "Success",
+        "timestamp": "2024-07-01T12:00:00Z",
+        "logs": "Build 1 completed successfully."
+    },
+    {
+        "id": 2,
+        "name": "Build 2",
+        "status": "Failed",
+        "timestamp": "2024-07-02T15:30:00Z",
+        "logs": "Build 2 failed due to compilation errors."
+    }
+]

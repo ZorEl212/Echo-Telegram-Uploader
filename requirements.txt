@@ -1,0 +1,1 @@
+flask pymongo redis tgcrypto pyrogram eventlet gunicorn "uvicorn[standard]" python-socketio "python-socketio[client]" "python-socketio[asyncio_client]" jwcrypto configparser

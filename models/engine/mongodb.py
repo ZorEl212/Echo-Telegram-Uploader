@@ -31,11 +31,11 @@ class DBClient:
         return docs
 
     def new(self, obj):
-        collection = self.database[obj.cls_name()]
+        collection = self.database[obj.cls_name]
         collection.insert_one(obj.to_dict())
 
     def delete(self, obj):
-        collection = self.database[obj.cls_name()]
+        collection = self.database[obj.cls_name]
         collection.delete_one({'id': obj.id})
 
     def get(self, cls, id):
@@ -56,7 +56,7 @@ class DBClient:
         return None  # Return None if document is not found
 
     def update(self, obj):
-        collection = self.database[obj.cls_name()]
+        collection = self.database[obj.cls_name]
         collection.update_one({'id': obj.id}, {'$set': obj.to_dict()})
         return obj
 

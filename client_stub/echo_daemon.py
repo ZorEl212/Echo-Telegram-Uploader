@@ -1,15 +1,17 @@
 import socketio
 import json
 import ast
-import time
+import threading
 import os
 import sys
 import ast
 import datetime
+import socket
 import configparser
 from socketio import ClientNamespace
 from models.exception.auth import AuthenticationError
 from client_stub.utils import config_loader, config_saver, exception_handler
+from engineio.async_drivers import gevent
 
 # Global variables
 sio = socketio.Client(logger=True, engineio_logger=True)
@@ -22,6 +24,7 @@ class DaemonAuthClient(ClientNamespace):
     def __init__(self, namespace=None):
         super().__init__(namespace)
         self.token = ''  # Token to be loaded from secure storage if available
+        self.socket_path = '/tmp/echo.sock'
 
     def __getattribute__(self, name):
         attr = super().__getattribute__(name)
@@ -53,7 +56,7 @@ class DaemonAuthClient(ClientNamespace):
             config.set('SERVER', 'server', str(data['server']))
         config_saver(config, data_dir)
         # Start sending mock data after successful authentication
-        self.send_mock_data()
+        self.listen_for_build_updates()
 
     def on_auth_failed(self, data):
         raise AuthenticationError(data['message'], data['err_code'])
@@ -71,20 +74,30 @@ class DaemonAuthClient(ClientNamespace):
         else:
             print("WebSocket connection is closed, unable to send data.")
 
-    def send_mock_data(self):
-        # Load mock data
-        try:
-            with open('client_stub/mock_builds.json') as f:
-                mock_builds = json.load(f)
+    def listen_for_build_updates(self):
+        print("Listening for build updates")
+        def socket_listner():
+            if os.path.exists(self.socket_path):
+                os.remove(self.socket_path)
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+                sock.bind(self.socket_path)
+                sock.listen()
+                while True:
+                    conn, _ = sock.accept()
+                    thread = threading.Thread(target=handle_client, args=(conn,))
+                    thread.start()
+                    
+        def handle_client(conn):
+            with conn:
+                while True:
+                    data = conn.recv(1024)
+                    if not data:
+                        break
+                    if data:
+                        build = json.loads(data)
+                        self.send_build_status(sio, build)
             
-            while True:
-                for build in mock_builds:
-                    self.send_build_status(sio, build)
-                    time.sleep(5)  # Delay to simulate real-time updates
-        except FileNotFoundError:
-            print("Mock builds file not found.")
-        except Exception as e:
-            print(f"Error sending mock data: {e}")
+        socket_listner()
 
 def main():
     ws_url = 'http://0.0.0.0:8000'
@@ -113,7 +126,8 @@ def main():
     except Exception as e:
         print(f"Unexpected error: {e}")
 
+    sio.wait()
+
 if __name__ == '__main__':
     print("Starting Echo Daemon client")
     main()
-    sio.wait()

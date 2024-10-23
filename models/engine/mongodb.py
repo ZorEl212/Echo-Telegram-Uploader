@@ -13,22 +13,26 @@ class DBClient:
         self.client = MongoClient('mongodb://localhost:27017')
         self.database = self.client['echo_monitor_db']
 
-    def all(self, cls=None):
+    def all(self, cls=None, attr=None, value=None):
         docs = {}
-        if cls is not None:
-            collection = self.database[cls if isinstance(cls, str) else cls.get_cls_name()]
-            for document in collection.find():
+
+        def process_collection(collection):
+            query = {attr: value} if cls and attr and value else {}
+            for document in collection.find(query):
                 key = f"{document['cls_name']}.{document['id']}"
-                document.pop('_id')
+                document.pop('_id', None)
                 docs[key] = document
+
+        if cls:
+            collection = self.database[cls if isinstance(cls, str) else cls.get_cls_name()]
+            process_collection(collection)
         else:
             for cls in self.classes:
                 collection = self.database[cls.get_cls_name()]
-                for document in collection.find():
-                    key = f"{document['cls_name']}.{document['id']}"
-                    document.pop('_id')
-                    docs[key] = document
+                process_collection(collection)
+
         return docs
+
 
     def new(self, obj):
         collection = self.database[obj.cls_name]
@@ -39,11 +43,10 @@ class DBClient:
         collection.delete_one({'id': obj.id})
 
     def get(self, cls, id):
-        if isinstance(cls, str):
-            cls = next((c for c in self.classes if c.get_cls_name() == cls), None)
-
         if cls is None:
             return None
+        if isinstance(cls, str):
+            cls = next((c for c in self.classes if c.get_cls_name() == cls), None)
 
         collection = self.database[cls.get_cls_name()]
         document = collection.find_one({'id': id})

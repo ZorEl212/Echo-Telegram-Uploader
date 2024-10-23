@@ -14,7 +14,8 @@ class BaseModel:
         for key, value in kwargs.items():
             if key in ['created_at', 'updated_at']:
                 value = datetime.strptime(value, '%Y-%m-%dT%H:%M:%S.%f')
-            setattr(self, key, value)
+            if key != 'cls_name':    
+                setattr(self, key, value)
 
     @classmethod
     def get_cls_name(cls):

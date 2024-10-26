@@ -12,6 +12,7 @@ from socketio import ClientNamespace
 from models.exception.auth import AuthenticationError
 from client_stub.utils import config_loader, config_saver, exception_handler
 from engineio.async_drivers import gevent
+from models.build import Build
 
 # Global variables
 sio = socketio.Client(logger=True, engineio_logger=True)
@@ -67,16 +68,15 @@ class DaemonAuthClient(ClientNamespace):
     @classmethod
     def send_build_status(cls, sio, build):
         # Update the timestamp to the current time
-        build['timestamp'] = datetime.datetime.utcnow().isoformat() + 'Z'
-        data = json.dumps(build)
         if sio.connected:
-            sio.emit('builds_report', data, namespace='/daemon')
+            sio.emit('builds_report', build, namespace='/daemon')
         else:
             print("WebSocket connection is closed, unable to send data.")
 
     def listen_for_build_updates(self):
         print("Listening for build updates")
-        def socket_listner():
+
+        def socket_listener():
             if os.path.exists(self.socket_path):
                 os.remove(self.socket_path)
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
@@ -86,18 +86,40 @@ class DaemonAuthClient(ClientNamespace):
                     conn, _ = sock.accept()
                     thread = threading.Thread(target=handle_client, args=(conn,))
                     thread.start()
-                    
+
         def handle_client(conn):
             with conn:
                 while True:
                     data = conn.recv(1024)
                     if not data:
                         break
-                    if data:
-                        build = json.loads(data)
-                        self.send_build_status(sio, build)
-            
-        socket_listner()
+                    try:
+                        command = json.loads(data)
+                        server_info = ast.literal_eval(config.get('SERVER', 'server'))
+                        # Responding back to the client
+                        if command.get('command') == 'add_build':
+                            new_build = Build(serverId=server_info.get('id'), buildNmae=command.get('data').get('name'),
+                                              buildDir=command.get('data').get('dir'))
+                            res = sio.call('add_build', {'server_id': server_info.get('id'), 'build': new_build.to_dict()}, namespace=self.namespace)
+                            if res.get('status') == 'success':
+                                response = {'success': True, 'data': new_build.to_dict() }
+                                conn.send(json.dumps(response).encode('utf-8'))
+                        if command.get('command') == 'add_user':
+                            res = sio.call('add_user', {'server_id': server_info.get('id'), 'user_id': command.get('user_id')}, namespace=self.namespace)
+                            if res.get('status') == 'success':
+                                response = {'success': True, 'data': {'user_id': command.get('user_id')}}
+                                conn.send(json.dumps(response).encode('utf-8'))
+                        else:
+                            response = {"status": "received", "build_id": command.get("id")}
+                            build_info = {'server_id': server_info.get('id'), 'build_id': command.get('id'), 'data': command.get('data')}
+                            conn.send(json.dumps({'status:': 'ok'}).encode('utf-8'))
+                            self.send_build_status(sio, build_info)
+                    except json.JSONDecodeError:
+                        print("Invalid data received")
+                        conn.send(b'{"error": "invalid data"}')  # Sending error response
+
+        socket_listener()
+
 
 def main():
     ws_url = 'http://0.0.0.0:8000'

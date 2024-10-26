@@ -6,7 +6,15 @@ class Server(BaseModel):
     userId = ""
     serverName = ""
     ipAddress = ""
+    server_users = set()
     
     @property
     def availableBuilds(self):
-        pass
+        from models import storage
+        return storage.all('Build', 'server_id', self.id)
+
+    def add_user(self, userId):
+        if userId not in self.server_users:
+            self.server_users.add(userId)
+            return True
+        return False

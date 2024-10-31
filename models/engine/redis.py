@@ -6,7 +6,13 @@ class Redis:
     def __init__(self):
         self.redis = redis.Redis(host=os.getenv('REDIS_HOST', 'localhost'), 
                                  port=os.getenv('REDIS_PORT', 6379), db=0)
-    
+
+    def publish(self, channel, data):
+        self.publish(channel, data)
+
+    def pubsub(self):
+        return self.redis.pubsub()
+
     def all(self):
         keys = self.redis.keys()
         return {key.decode('utf-8'): self.redis.get(key).decode('utf-8') for key in keys}

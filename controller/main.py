@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
-from pyrogram import Client, filters
+from pyrogram import filters
+from pyromod import Client, Message
 import os
 import time
 import sys
@@ -24,6 +25,7 @@ bot = Client(os.path.join(SESSION_PATH, "my_bot"),
               api_hash=API_HASH, 
               bot_token=BOT_TOKEN)
 build_reports = {}  # Store build reports with IDs
+user_waiting_for_input = {}
 
 def listen_to_redis():
     pubsub = config.pubsub()
@@ -33,6 +35,11 @@ def listen_to_redis():
             data = json.loads(message['data'])
             build_id = data.get('build_id')
             build_reports[build_id] = data  # Store or update the report
+
+def query_servers(userId):
+    servers = storage.all('Server', 'userId', userId) or storage.all('Server', 'users', userId)
+    if servers:
+        return {server['id']: server['serverName'] for server in servers.values()}
 
 @bot.on_message(filters.command("start"))
 async def start(client, message):
@@ -53,31 +60,73 @@ async def button(client, message):
     reply_markup=InlineKeyboardMarkup(
         [
             [InlineKeyboardButton("Register", callback_data="register")],
-            [InlineKeyboardButton("Add user", callback_data="add_user")],
+            [InlineKeyboardButton("Add user to server", callback_data="add_user")],
             [InlineKeyboardButton("Servers", callback_data="get_servers")]
         ]))
+
 
 @bot.on_callback_query()
 async def handle_callback_query(client, callback_query):
     if callback_query.data == "register":
         user = storage.get_by_attr(User, 'telegram_id', str(callback_query.message.chat.id))
         if user:
-            await bot.send_message(chat_id=callback_query.message.chat.id, text="Your're already registerd, use /id to view ur ID")
+            await bot.send_message(
+                chat_id=callback_query.message.chat.id,
+                text="You're already registered, use /id to view your ID"
+            )
             return
-        user = User(telegram_id=callback_query.message.chat.id, tgUsername=callback_query.message.chat.username,
-                    fullName=str(callback_query.message.chat.first_name) + " "+ str(callback_query.message.chat.last_name))
-        
+
+        user = User(
+            telegram_id=str(callback_query.message.chat.id),
+            tgUsername=str(callback_query.message.chat.username),
+            fullName=str(callback_query.message.chat.first_name) + " " + str(callback_query.message.chat.last_name)
+        )
+        storage.new(user)
+
         await bot.send_message(
             chat_id=callback_query.message.chat.id,
             text=f"Registered successfully!\nName: {user.fullName} \nID: `{user.id}`"
         )
 
+    elif callback_query.data == "add_user":
+        user = storage.get_by_attr(User, 'telegram_id', str(callback_query.message.chat.id))
+        if user:
+            server_names = query_servers(user.id)
+            if server_names:
+                # Create a list of buttons with a prefix to identify server callbacks
+                reply_markup = InlineKeyboardMarkup([
+                    [InlineKeyboardButton(name, callback_data=f"server_{_id}")] for _id, name in server_names.items()
+                ])
+                await callback_query.message.edit(
+                    "Available Servers:",
+                    reply_markup=reply_markup
+                )
+            else:
+                await bot.send_message(
+                    chat_id=callback_query.message.chat.id,
+                    text="Sorry, no servers are available for this user!"
+                )
+
+    elif callback_query.data.startswith("server_"):
+        server_id = callback_query.data.split("_", 1)[1]
+        server = storage.get('Server', server_id)
+        user = storage.get_by_attr(User, 'telegram_id', str(callback_query.message.chat.id))
+        if user.id != server.userId:
+            await callback_query.message.reply_text("You're not admin of the server!")
+        else:
+            chat = callback_query.message.chat
+            user_id = await chat.ask("Enter user ID", filters=filters.text)
+            if storage.get(User, user_id.text):
+                server.add_user(user_id.text)
+                await callback_query.message.reply("User added to server.")
+            else:
+                await callback_query.message.reply("User doesn't exist!")
+
     if callback_query.data == "get_servers":
         user = storage.get_by_attr('User', 'telegram_id', str(callback_query.message.chat.id))
         if user:
-            servers = storage.all('Server', 'userId', user.id)
-            if servers:
-                server_names = {server['id']: server['serverName'] for server in servers.values()}
+            server_names = query_servers(user.id)
+            if server_names:
                 reply_markup = InlineKeyboardMarkup([
                     [InlineKeyboardButton(name, callback_data=_id)] for _id, name in server_names.items()
                 ])
@@ -86,7 +135,7 @@ async def handle_callback_query(client, callback_query):
             else:
                 await bot.send_message(callback_query.message.chat.id, "Sorry no servers are availablle for this user!")
         else:
-            await bot.send_message(callback_query.message.chat.id, "Sorry you're not registered!")
+            await bot.send_message(callback_query.message.chat.id, "Sorry you're not registered yet!")
 
 @bot.on_message(filters.command("upload"))
 async def upload_file(client, message):

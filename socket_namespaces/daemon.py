@@ -2,16 +2,20 @@ from socketio import Namespace
 import json
 from models.server import Server
 from socket_namespaces.common import Common
-from models import storage, sio
+from models import storage, sio, config
 from models.build import Build
 from models.user import User
+
+import asyncio
 
 class Daemon(Common, Namespace):
     def on_builds_report(self, sid, data):
         if not self.check_auth(sid):
             self.handle_unauthorized(sid)
             return
+        build_id = data.get("build_id")
         print(f"Received builds report from {sid}: {data}")
+        config.publish('build_reports', json.dumps(data))
         
     def on_add_build(self, sid, data):
         if not self.check_auth(sid):

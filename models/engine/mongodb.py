@@ -31,7 +31,7 @@ class DBClient:
                 collection = self.database[cls.get_cls_name()]
                 process_collection(collection)
 
-        return docs
+        return docs if len(docs) > 0 else None
 
     def new(self, obj):
         collection = self.database[obj.cls_name]

@@ -4,6 +4,7 @@ from models.base_model import BaseModel
 
 class Build(BaseModel):
     serverId = ""
+    userId = ""
     buildName = ""
     buildDir = ""
     buildStatus = ""

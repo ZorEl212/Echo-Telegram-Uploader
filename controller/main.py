@@ -5,6 +5,7 @@ import os
 import time
 import sys
 import json
+from models.user import User
 from models import config, storage
 from collections import defaultdict
 from pyrogram.types import (
@@ -35,31 +36,42 @@ def listen_to_redis():
 
 @bot.on_message(filters.command("start"))
 async def start(client, message):
-    await message.reply_text("Welcome! Use /upload <file_path> to upload a file.")
+    await message.reply_text("Welcome! Use /menu to get started.")
 
 @bot.on_message(filters.command("id"))
 async def get_chat_id(client, message):
-    await message.reply_text(f"Chat ID: {message.chat.id}")
+    user = storage.get_by_attr(User, 'telegram_id', str(message.chat.id))
+    if user:
+        await message.reply_text(f"Registered ID: `{user.id}`")
+        return
+    await message.reply_text(f"You're not registered yet.")
 
-@bot.on_message(filters.command("button"))
+@bot.on_message(filters.command("menu"))
 async def button(client, message):
     await bot.send_message(
-    message.chat.id, "These are inline buttons",
+    message.chat.id, "Options:",
     reply_markup=InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("Servers", callback_data="get_servers")],
-            [InlineKeyboardButton("Docs", url="https://docs.pyrogram.org")]
+            [InlineKeyboardButton("Register", callback_data="register")],
+            [InlineKeyboardButton("Add user", callback_data="add_user")],
+            [InlineKeyboardButton("Servers", callback_data="get_servers")]
         ]))
 
 @bot.on_callback_query()
 async def handle_callback_query(client, callback_query):
-    if callback_query.data == "data_button":
-        await callback_query.answer("You pressed the Data button!")
-        # You can perform any action here, like sending a message back to the user
+    if callback_query.data == "register":
+        user = storage.get_by_attr(User, 'telegram_id', str(callback_query.message.chat.id))
+        if user:
+            await bot.send_message(chat_id=callback_query.message.chat.id, text="Your're already registerd, use /id to view ur ID")
+            return
+        user = User(telegram_id=callback_query.message.chat.id, tgUsername=callback_query.message.chat.username,
+                    fullName=str(callback_query.message.chat.first_name) + " "+ str(callback_query.message.chat.last_name))
+        
         await bot.send_message(
             chat_id=callback_query.message.chat.id,
-            text="Here’s the data you requested!"
+            text=f"Registered successfully!\nName: {user.fullName} \nID: `{user.id}`"
         )
+
     if callback_query.data == "get_servers":
         user = storage.get_by_attr('User', 'telegram_id', str(callback_query.message.chat.id))
         if user:

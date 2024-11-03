@@ -8,7 +8,7 @@ class Redis:
                                  port=os.getenv('REDIS_PORT', 6379), db=0)
 
     def publish(self, channel, data):
-        self.publish(channel, data)
+        self.redis.publish(channel, data)
 
     def pubsub(self):
         return self.redis.pubsub()

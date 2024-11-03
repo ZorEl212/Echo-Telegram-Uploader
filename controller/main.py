@@ -61,9 +61,8 @@ async def button(client, message):
         [
             [InlineKeyboardButton("Register", callback_data="register")],
             [InlineKeyboardButton("Add user to server", callback_data="add_user")],
-            [InlineKeyboardButton("Servers", callback_data="get_servers")]
+            [InlineKeyboardButton("Builds", callback_data="get_builds")]
         ]))
-
 
 @bot.on_callback_query()
 async def handle_callback_query(client, callback_query):
@@ -85,7 +84,10 @@ async def handle_callback_query(client, callback_query):
 
         await bot.send_message(
             chat_id=callback_query.message.chat.id,
-            text=f"Registered successfully!\nName: {user.fullName} \nID: `{user.id}`"
+            text=f"Registered successfully!\nName: {user.fullName} \nID: `{user.id}`",
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("Back to Menu", callback_data="back_to_menu")]]
+            )
         )
 
     elif callback_query.data == "add_user":
@@ -96,7 +98,7 @@ async def handle_callback_query(client, callback_query):
                 # Create a list of buttons with a prefix to identify server callbacks
                 reply_markup = InlineKeyboardMarkup([
                     [InlineKeyboardButton(name, callback_data=f"server_{_id}")] for _id, name in server_names.items()
-                ])
+                ] + [[InlineKeyboardButton("Back to Menu", callback_data="back_to_menu")]])  # Add back button
                 await callback_query.message.edit(
                     "Available Servers:",
                     reply_markup=reply_markup
@@ -104,7 +106,8 @@ async def handle_callback_query(client, callback_query):
             else:
                 await bot.send_message(
                     chat_id=callback_query.message.chat.id,
-                    text="Sorry, no servers are available for this user!"
+                    text="Sorry, no servers are available for this user!",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Back to Menu", callback_data="back_to_menu")]])
                 )
 
     elif callback_query.data.startswith("server_"):
@@ -112,7 +115,8 @@ async def handle_callback_query(client, callback_query):
         server = storage.get('Server', server_id)
         user = storage.get_by_attr(User, 'telegram_id', str(callback_query.message.chat.id))
         if user.id != server.userId:
-            await callback_query.message.reply_text("You're not admin of the server!")
+            await callback_query.message.reply_text("You're not admin of the server!",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Back", callback_data="add_user")]]))
         else:
             chat = callback_query.message.chat
             user_id = await chat.ask("Enter user ID", filters=filters.text)
@@ -122,20 +126,38 @@ async def handle_callback_query(client, callback_query):
             else:
                 await callback_query.message.reply("User doesn't exist!")
 
-    if callback_query.data == "get_servers":
+    elif callback_query.data == "get_builds":
         user = storage.get_by_attr('User', 'telegram_id', str(callback_query.message.chat.id))
         if user:
             server_names = query_servers(user.id)
             if server_names:
                 reply_markup = InlineKeyboardMarkup([
-                    [InlineKeyboardButton(name, callback_data=_id)] for _id, name in server_names.items()
-                ])
-                await callback_query.message.edit("Available Servers:",
-                                       reply_markup=reply_markup)
+                    [InlineKeyboardButton(name, callback_data=f"sBuilds_{_id}")] for _id, name in server_names.items()
+                ] + [[InlineKeyboardButton("Back to Menu", callback_data="back_to_menu")]])
+                await callback_query.message.edit("Available Servers:", reply_markup=reply_markup)
             else:
-                await bot.send_message(callback_query.message.chat.id, "Sorry no servers are availablle for this user!")
+                await bot.send_message(callback_query.message.chat.id, "Sorry no servers are available for this user!",
+                                       reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Back to Menu", callback_data="back_to_menu")]]))
         else:
-            await bot.send_message(callback_query.message.chat.id, "Sorry you're not registered yet!")
+            await bot.send_message(callback_query.message.chat.id, "Sorry you're not registered yet!",
+                                   reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Back to Menu", callback_data="back_to_menu")]]))
+    elif callback_query.data.startswith("sBuilds_"):
+        user = storage.get_by_attr('User', 'telegram_id', str(callback_query.message.chat.id))
+        server_id = callback_query.data.split("_", 1)[1]
+        server = storage.get('Server', server_id)
+        builds = storage.all('Build', 'serverId', server_id)
+        filtered_builds = {k: v for k, v in builds.items() if user.id == v['userId']}
+        if len(filtered_builds) > 0:
+            reply_markup = InlineKeyboardMarkup([
+                [InlineKeyboardButton(name['buildName'], callback_data=f"Builds_{name['id']}")] for name in filtered_builds.values()
+            ] + [[InlineKeyboardButton("Back", callback_data="get_builds")]])
+            await callback_query.message.edit('Available builds:', reply_markup=reply_markup)
+        else:
+            await callback_query.message.reply("You have no builds on this server.",
+                                               reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Back", callback_data="get_builds")]]))
+
+    elif callback_query.data == "back_to_menu":
+        await button(client, callback_query.message)  # Go back to the main menu
 
 @bot.on_message(filters.command("upload"))
 async def upload_file(client, message):

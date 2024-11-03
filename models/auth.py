@@ -1,48 +1,50 @@
 #!/usr/bin/env python3
 import json
+from datetime import datetime
 from jwcrypto import jwe, jwk
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
 from models import storage, config
-from datetime import datetime
 
 class Auth:
-
-    public_key = config.get('PUBLIC_KEY')
-    private_key = config.get('PRIVATE_KEY')
-    key_password = config.get('KEY_PASSWORD')
+    public_key: str = config.get('PUBLIC_KEY')
+    private_key: str = config.get('PRIVATE_KEY')
 
     @classmethod
-    def load_private_key_with_password(cls):
-        # Load the private key with password protection
-        private_key = serialization.load_pem_private_key(
-            cls.private_key.encode(),
-            password=cls.key_password.encode(),
-            backend=default_backend()
-        )
+    def load_private_key(cls) -> jwk.JWK:
+        """Load the private key without password protection."""
+        try:
+            private_key = serialization.load_pem_private_key(
+                cls.private_key.encode(),
+                backend=default_backend(), password=None
+            )
+        except Exception as e:
+            print(f"Error loading private key: {e}")
+            return None
 
-        # Convert to jwcrypto format
         private_key_pem = private_key.private_bytes(
             encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
             encryption_algorithm=serialization.NoEncryption()
         )
-
+        
         return jwk.JWK.from_pem(private_key_pem)
 
     @classmethod
-    def verify_token(cls, token):
-        # Load the private key
-        private_key = cls.load_private_key_with_password()
+    def verify_token(cls, token: str) -> dict:
+        """Verify and decrypt the provided JWE token."""
+        private_key = cls.load_private_key()
+        if private_key is None:
+            return None
 
         # Create JWE object and deserialize the token
         jwe_token = jwe.JWE()
-        jwe_token.deserialize(token)
-
-        # Decrypt the JWE token
         try:
+            jwe_token.deserialize(token)
+            # Decrypt the JWE token
             jwe_token.decrypt(private_key)
         except Exception as e:
+            print(f"Token verification error: {e}")
             return None
 
         # Get the decrypted message (JSON string)
@@ -50,10 +52,11 @@ class Auth:
         return json.loads(decrypted_message)
 
     @classmethod
-    def create_token(cls, data, sid):
+    def create_token(cls, data: dict, sid: str) -> str:
+        """Create a JWE token from the provided data."""
         data_string = json.dumps(data)
         public_key = jwk.JWK.from_pem(cls.public_key.encode())
-            
+        
         # Create JWE object
         protected_header = {
             "alg": "RSA-OAEP",
@@ -70,13 +73,12 @@ class Auth:
         )
 
         # Serialize the JWE token
-        jwe_token = token.serialize()
-        return jwe_token
+        return token.serialize()
 
     @classmethod
-    def check_server_details(cls, user_id, serverId):
-        server = storage.get('Server', serverId)
-        if (server is None or server.id != serverId or
-            server.userId != user_id):
+    def check_server_details(cls, user_id: str, server_id: str) -> dict:
+        """Check if the server details match the user ID and server ID."""
+        server = storage.get('Server', server_id)
+        if (server is None or server.id != server_id or server.userId != user_id):
             return False
         return server.to_dict()

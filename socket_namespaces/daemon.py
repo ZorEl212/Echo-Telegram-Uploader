@@ -6,7 +6,6 @@ from models import storage, sio, config
 from models.build import Build
 from models.user import User
 
-import asyncio
 
 class Daemon(Common, Namespace):
     def on_builds_report(self, sid, data):
@@ -15,8 +14,9 @@ class Daemon(Common, Namespace):
             return
         build_id = data.get("build_id")
         print(f"Received builds report from {sid}: {data}")
-        config.publish('build_reports', json.dumps(data))
-        
+        build = storage.get('Build', build_id)
+        retval =storage.update_attrib(build, 'report', data.get('data'))
+                
     def on_add_build(self, sid, data):
         if not self.check_auth(sid):
             self.handle_unauthorized(sid)

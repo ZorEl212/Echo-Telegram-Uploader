@@ -78,6 +78,11 @@ class DBClient:
         collection.update_one({'id': obj.id}, {'$set': obj.to_dict()})
         return obj
 
+    def update_attrib(self, obj, attr, value):
+        collection = self.database[obj.cls_name]
+        result = collection.update_one({'id': obj.id}, {'$set': {attr: value}})
+        return True if result.modified_count > 0 else False
+        
     def close(self):
         self.client.close()
 

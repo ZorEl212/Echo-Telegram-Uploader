@@ -4,13 +4,13 @@ from pyrogram import filters
 from pyromod import Client, Message
 import os
 import time
-import sys
-import json
+import asyncio
 from models.user import User
 from models import config, storage
 from collections import defaultdict
 from pyrogram.types import (
     ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton)
+
 
 data_dir = os.path.join(os.getenv("HOME"), ".echo")
 API_ID = config.get('API_ID')
@@ -19,23 +19,12 @@ BOT_TOKEN = config.get('BOT_TOKEN')
 SESSION_PATH = data_dir
 GROUP_CHAT_ID = config.get('GROUP_CHAT_ID')
 
-# Create a Pyrogram client
 bot = Client(os.path.join(SESSION_PATH, "my_bot"),
               api_id=API_ID,
               api_hash=API_HASH, 
               bot_token=BOT_TOKEN)
-build_reports = {}  # Store build reports with IDs
-user_waiting_for_input = {}
 
-def listen_to_redis():
-    pubsub = config.pubsub()
-    pubsub.subscribe("build_reports")
-    for message in pubsub.listen():
-        if message['type'] == 'message':
-            data = json.loads(message['data'])
-            build_id = data.get('build_id')
-            build_reports[build_id] = data  # Store or update the report
-
+running_updates = {}
 def query_servers(userId):
     servers = storage.all('Server', 'userId', userId) or storage.all('Server', 'users', userId)
     if servers:
@@ -66,6 +55,7 @@ async def button(client, message):
 
 @bot.on_callback_query()
 async def handle_callback_query(client, callback_query):
+    global running_updates
     if callback_query.data == "register":
         user = storage.get_by_attr(User, 'telegram_id', str(callback_query.message.chat.id))
         if user:
@@ -156,6 +146,43 @@ async def handle_callback_query(client, callback_query):
             await callback_query.message.reply("You have no builds on this server.",
                                                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Back", callback_data="get_builds")]]))
 
+    elif callback_query.data.startswith("Builds_"):
+        reply_markup = InlineKeyboardMarkup([
+                [InlineKeyboardButton("Back", callback_data='stop_and_back')]
+            ])
+        build_id = callback_query.data.split("_", 1)[1]
+        build = storage.get('Build', build_id)
+            # Set up a flag for running updates
+        running_updates[callback_query.message.chat.id] = True
+
+        try:
+            while running_updates[callback_query.message.chat.id]:
+                if build.report.get('status', None) == 'success':
+                    await callback_query.message.reply('Build completed successfully')
+                    break
+                elif build.report.get('status', None) == 'failed':
+                    await callback_query.message.edit('Build failed.\n Error Log: ')
+                    break
+                else:
+                    report = f"""
+                    Progress: {build.report.get('progress')}/100
+                    Tasks done: {build.report.get('tasks_done')}
+                    Total Tasks: {build.report.get('total_tasks')}
+                    Description: {build.report.get('description')}
+                    """
+                    await callback_query.message.edit(report, reply_markup=reply_markup)
+                    await asyncio.sleep(5)  # Wait before checking again
+                    build = storage.get('Build', build_id)
+
+        finally:
+            # Clean up after the loop
+            if callback_query.message.chat.id in running_updates:
+                del running_updates[callback_query.message.chat.id]
+
+    elif callback_query.data == "stop_and_back":
+        running_updates[callback_query.message.chat.id] = False
+        callback_query.data = "get_builds"
+        await handle_callback_query(client, callback_query)
     elif callback_query.data == "back_to_menu":
         await button(client, callback_query.message)  # Go back to the main menu
 
@@ -185,7 +212,6 @@ async def upload_file(client, message):
     last_percentage = 0
     percentage_update_threshold = 10  # update every 10%
 
-    # Keep track of the progress while uploading
     async def progress(current, total):
         percent = current / total * 100
         nonlocal last_update_time, last_percentage
